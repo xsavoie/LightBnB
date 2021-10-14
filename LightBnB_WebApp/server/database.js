@@ -119,17 +119,65 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 
-const getAllProperties = (options, limit = 10) => {
-  return pool
-    .query(`SELECT * FROM properties LIMIT $1`, [limit])
-    .then((result) => {
-      return result.rows;
-    })
-    .catch((err) => {
-      return err.message;
-    });
+ const getAllProperties = function (options, limit = 3) {
+  // 1
+  console.log("OPTIONS", options)
+  const queryParams = [];
+  console.log('queryParams', queryParams)
+  // 2
+  let queryString = `
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  `;
+
+  // 3
+  // issue - city needs to be spelled with capital first letter
+  if (options.city) {
+    queryParams.push(`%${options.city}%`);
+    queryString += `WHERE city LIKE $${queryParams.length} `;
+    console.log('queryParams', queryParams);
+  }
+
+  if (options.owner_id) {
+    queryParams.push(`${options.owner_id}`);
+    queryString += `AND guest_id = $${queryParams.length}`
+  }
+
+  if (options.minimum_price_per_night) {
+    console.log('minimum price: ', options.minimum_price_per_night);
+    queryParams.push(`${options.minimum_price_per_night}`);
+    console.log('queryParams', queryParams);
+    queryString += `AND cost_per_night > $${queryParams.length} `;
+  }
+
+  if (options.maximum_price_per_night) {
+    console.log("maximum price: ", options.maximum_price_per_night);
+    queryParams.push(`${options.maximum_price_per_night}`);
+    console.log('queryParams', queryParams);
+    queryString += `AND cost_per_night < $${queryParams.length} `;
+  }
+
+  if (options.minimum_rating) {
+    console.log("minimum rating: ", options.minimum_rating);
+    queryParams.push(`${options.minimum_rating}`);
+    console.log('queryParams', queryParams);
+    queryString += `AND rating >= $${queryParams.length}`
+  }
+
+  queryParams.push(limit);
+  queryString += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  LIMIT $${queryParams.length};
+  `;
+
+  console.log(queryString, queryParams);
+
+  return pool.query(queryString, queryParams).then((res) => res.rows);
 };
 exports.getAllProperties = getAllProperties;
+
 
 
 /**
